@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,7 +7,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, LogOut, ArrowLeft, Save } from 'lucide-react';
 
 interface UserProfile {
     weight: number;
@@ -21,77 +20,134 @@ interface UserProfile {
     target_calories: number;
 }
 
-const Onboarding = () => {
+const Settings = () => {
     const navigate = useNavigate();
-    const [step, setStep] = useState(1);
+    const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(false);
-    const [profile, setProfile] = useState<UserProfile>({
-        weight: 0,
-        height: 0,
-        age: 0,
-        gender: 'male',
-        activity_level: 'moderate',
-        goal: 'maintain',
-        maintenance_calories: 0,
-        target_calories: 0,
-    });
+
+    // Calculate BMR using Mifflin-St Jeor Equation
+    const calculateBMR = (weight: number, height: number, age: number, gender: 'male' | 'female') => {
+        if (gender === 'male') {
+            return 10 * weight + 6.25 * height - 5 * age + 5;
+        } else {
+            return 10 * weight + 6.25 * height - 5 * age - 161;
+        }
+    };
+
+    // Calculate maintenance calories based on activity level
+    const calculateMaintenanceCalories = (bmr: number, activityLevel: string) => {
+        const activityMultipliers = {
+            'sedentary': 1.2,
+            'light': 1.375,
+            'moderate': 1.55,
+            'active': 1.725,
+            'very-active': 1.9
+        };
+        return Math.round(bmr * activityMultipliers[activityLevel as keyof typeof activityMultipliers]);
+    };
+
+    // Calculate target calories based on goal
+    const calculateTargetCalories = (maintenanceCalories: number, goal: 'bulk' | 'cut' | 'maintain') => {
+        switch (goal) {
+            case 'bulk':
+                return Math.round(maintenanceCalories + 500); // Surplus for muscle gain
+            case 'cut':
+                return Math.round(maintenanceCalories - 500); // Deficit for fat loss
+            case 'maintain':
+                return maintenanceCalories;
+            default:
+                return maintenanceCalories;
+        }
+    };
+
+    // Recalculate calories when profile changes
+    const updateProfileWithCalculations = async (updatedProfile: Partial<UserProfile>) => {
+        if (!profile) return;
+
+        const newProfile = { ...profile, ...updatedProfile };
+
+        // Recalculate if any relevant fields changed
+        if (updatedProfile.weight !== undefined ||
+            updatedProfile.height !== undefined ||
+            updatedProfile.age !== undefined ||
+            updatedProfile.gender !== undefined ||
+            updatedProfile.activity_level !== undefined ||
+            updatedProfile.goal !== undefined) {
+
+            const bmr = calculateBMR(newProfile.weight, newProfile.height, newProfile.age, newProfile.gender);
+            const maintenanceCalories = calculateMaintenanceCalories(bmr, newProfile.activity_level);
+            const targetCalories = calculateTargetCalories(maintenanceCalories, newProfile.goal);
+
+            newProfile.maintenance_calories = maintenanceCalories;
+            newProfile.target_calories = targetCalories;
+
+            // Auto-save to Supabase
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session) {
+                    await supabase
+                        .from('profiles')
+                        .update({
+                            ...newProfile
+                        })
+                        .eq('id', session.user.id);
+                }
+            } catch (error) {
+                console.error('Error auto-saving profile:', error);
+            }
+        }
+
+        setProfile(newProfile);
+    };
 
     useEffect(() => {
-        // Check if user is authenticated
-        const checkAuth = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                navigate('/auth');
+        const fetchProfile = async () => {
+            setLoading(true);
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    navigate('/auth');
+                    return;
+                }
+
+                const { data: profileData, error } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', session.user.id)
+                    .single();
+
+                if (error) throw error;
+
+                // Type assertion to ensure the data matches our UserProfile interface
+                const typedProfile: UserProfile = {
+                    weight: profileData.weight,
+                    height: profileData.height,
+                    age: profileData.age,
+                    gender: profileData.gender as 'male' | 'female',
+                    activity_level: profileData.activity_level as 'sedentary' | 'light' | 'moderate' | 'active' | 'very-active',
+                    goal: profileData.goal as 'bulk' | 'cut' | 'maintain',
+                    maintenance_calories: profileData.maintenance_calories,
+                    target_calories: profileData.target_calories
+                };
+
+                setProfile(typedProfile);
+            } catch (error) {
+                console.error('Error fetching profile:', error);
+                toast({
+                    title: "Error",
+                    description: "Failed to load profile. Please try again.",
+                    variant: "destructive",
+                });
+            } finally {
+                setLoading(false);
             }
         };
-        checkAuth();
+
+        fetchProfile();
     }, [navigate]);
 
-    const calculateMaintenanceCalories = () => {
-        // Harris-Benedict Equation
-        let bmr;
-        if (profile.gender === 'male') {
-            bmr = 88.362 + (13.397 * profile.weight) + (4.799 * profile.height) - (5.677 * profile.age);
-        } else {
-            bmr = 447.593 + (9.247 * profile.weight) + (3.098 * profile.height) - (4.330 * profile.age);
-        }
-
-        const activityMultipliers = {
-            sedentary: 1.2,
-            light: 1.375,
-            moderate: 1.55,
-            active: 1.725,
-            'very-active': 1.9,
-        };
-
-        const maintenanceCalories = Math.round(bmr * activityMultipliers[profile.activity_level]);
-
-        let targetCalories = maintenanceCalories;
-        if (profile.goal === 'bulk') {
-            targetCalories = maintenanceCalories + 500;
-        } else if (profile.goal === 'cut') {
-            targetCalories = maintenanceCalories - 500;
-        }
-
-        setProfile(prev => ({
-            ...prev,
-            maintenance_calories: maintenanceCalories,
-            target_calories: targetCalories,
-        }));
-    };
-
-    const handleNext = () => {
-        if (step === 2) {
-            calculateMaintenanceCalories();
-        }
-        if (step < 3) {
-            setStep(step + 1);
-        }
-    };
-
-    const handleComplete = async () => {
+    const handleSave = async () => {
         setLoading(true);
-
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) {
@@ -100,31 +156,20 @@ const Onboarding = () => {
 
             const { error } = await supabase
                 .from('profiles')
-                .upsert({
-                    id: session.user.id,
-                    weight: profile.weight,
-                    height: profile.height,
-                    age: profile.age,
-                    gender: profile.gender,
-                    activity_level: profile.activity_level,
-                    goal: profile.goal,
-                    maintenance_calories: profile.maintenance_calories,
-                    target_calories: profile.target_calories,
-                });
+                .update(profile)
+                .eq('id', session.user.id);
 
             if (error) throw error;
 
             toast({
-                title: "Profile Created!",
-                description: "Your profile has been saved successfully.",
+                title: "Profile Updated",
+                description: "Your profile has been successfully updated.",
             });
-
-            navigate('/tracker');
         } catch (error) {
-            console.error('Error saving profile:', error);
+            console.error('Error updating profile:', error);
             toast({
                 title: "Error",
-                description: "Failed to save your profile. Please try again.",
+                description: "Failed to update profile. Please try again.",
                 variant: "destructive",
             });
         } finally {
@@ -132,188 +177,154 @@ const Onboarding = () => {
         }
     };
 
-    const isStepValid = () => {
-        switch (step) {
-            case 1:
-                return profile.weight > 0 && profile.height > 0 && profile.age > 0;
-            case 2:
-                return true;
-            case 3:
-                return true;
-            default:
-                return false;
-        }
+    const handleSignOut = async () => {
+        await supabase.auth.signOut();
+        navigate('/auth');
     };
 
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+        );
+    }
+
+    if (!profile) {
+        return null;
+    }
+
     return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-            <Card className="w-full max-w-md">
+        <div className="min-h-screen bg-background p-4">
+            <Card className="max-w-lg mx-auto">
                 <CardHeader>
-                    <CardTitle>Welcome to CaloricAI</CardTitle>
-                    <CardDescription>
-                        Let's set up your profile to calculate your caloric needs
-                    </CardDescription>
+                    <CardTitle>Settings</CardTitle>
+                    <CardDescription>Update your profile information</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                    {step === 1 && (
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-semibold">Basic Information</h3>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="weight">Weight (kg)</Label>
-                                <Input
-                                    id="weight"
-                                    type="number"
-                                    value={profile.weight || ''}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, weight: Number(e.target.value) }))}
-                                    placeholder="Enter your weight"
-                                />
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="weight">Weight (kg)</Label>
+                        <Input
+                            id="weight"
+                            type="number"
+                            value={profile.weight}
+                            onChange={(e) => updateProfileWithCalculations({ weight: Number(e.target.value) })}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="height">Height (cm)</Label>
+                        <Input
+                            id="height"
+                            type="number"
+                            value={profile.height}
+                            onChange={(e) => updateProfileWithCalculations({ height: Number(e.target.value) })}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="age">Age</Label>
+                        <Input
+                            id="age"
+                            type="number"
+                            value={profile.age}
+                            onChange={(e) => updateProfileWithCalculations({ age: Number(e.target.value) })}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Gender</Label>
+                        <RadioGroup
+                            value={profile.gender}
+                            onValueChange={(value) => updateProfileWithCalculations({ gender: value as 'male' | 'female' })}
+                        >
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="male" id="male" />
+                                <Label htmlFor="male">Male</Label>
                             </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="height">Height (cm)</Label>
-                                <Input
-                                    id="height"
-                                    type="number"
-                                    value={profile.height || ''}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, height: Number(e.target.value) }))}
-                                    placeholder="Enter your height"
-                                />
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="female" id="female" />
+                                <Label htmlFor="female">Female</Label>
                             </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="age">Age</Label>
-                                <Input
-                                    id="age"
-                                    type="number"
-                                    value={profile.age || ''}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, age: Number(e.target.value) }))}
-                                    placeholder="Enter your age"
-                                />
+                        </RadioGroup>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Activity Level</Label>
+                        <RadioGroup
+                            value={profile.activity_level}
+                            onValueChange={(value) => updateProfileWithCalculations({ activity_level: value as any })}
+                        >
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="sedentary" id="sedentary" />
+                                <Label htmlFor="sedentary">Sedentary</Label>
                             </div>
-
-                            <div className="space-y-2">
-                                <Label>Gender</Label>
-                                <RadioGroup
-                                    value={profile.gender}
-                                    onValueChange={(value) => setProfile(prev => ({ ...prev, gender: value as 'male' | 'female' }))}
-                                >
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="male" id="male" />
-                                        <Label htmlFor="male">Male</Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="female" id="female" />
-                                        <Label htmlFor="female">Female</Label>
-                                    </div>
-                                </RadioGroup>
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="light" id="light" />
+                                <Label htmlFor="light">Light</Label>
                             </div>
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="moderate" id="moderate" />
+                                <Label htmlFor="moderate">Moderate</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="active" id="active" />
+                                <Label htmlFor="active">Active</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="very-active" id="very-active" />
+                                <Label htmlFor="very-active">Very Active</Label>
+                            </div>
+                        </RadioGroup>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Goal</Label>
+                        <RadioGroup
+                            value={profile.goal}
+                            onValueChange={(value) => updateProfileWithCalculations({ goal: value as 'bulk' | 'cut' | 'maintain' })}
+                        >
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="bulk" id="bulk" />
+                                <Label htmlFor="bulk">Bulk (+500 cal)</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="cut" id="cut" />
+                                <Label htmlFor="cut">Cut (-500 cal)</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="maintain" id="maintain" />
+                                <Label htmlFor="maintain">Maintain</Label>
+                            </div>
+                        </RadioGroup>
+                    </div>
+
+                    {/* Display calculated calories */}
+                    <div className="p-4 bg-muted rounded-lg space-y-2">
+                        <div className="flex justify-between">
+                            <span className="text-sm font-medium">Maintenance Calories:</span>
+                            <span className="text-sm">{profile.maintenance_calories}</span>
                         </div>
-                    )}
-
-                    {step === 2 && (
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-semibold">Activity & Goals</h3>
-
-                            <div className="space-y-2">
-                                <Label>Activity Level</Label>
-                                <RadioGroup
-                                    value={profile.activity_level}
-                                    onValueChange={(value) => setProfile(prev => ({ ...prev, activity_level: value as any }))}
-                                >
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="sedentary" id="sedentary" />
-                                        <Label htmlFor="sedentary">Sedentary (little/no exercise)</Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="light" id="light" />
-                                        <Label htmlFor="light">Light (1-3 days/week)</Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="moderate" id="moderate" />
-                                        <Label htmlFor="moderate">Moderate (3-5 days/week)</Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="active" id="active" />
-                                        <Label htmlFor="active">Active (6-7 days/week)</Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="very-active" id="very-active" />
-                                        <Label htmlFor="very-active">Very Active (2x/day)</Label>
-                                    </div>
-                                </RadioGroup>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Goal</Label>
-                                <RadioGroup
-                                    value={profile.goal}
-                                    onValueChange={(value) => setProfile(prev => ({ ...prev, goal: value as 'bulk' | 'cut' | 'maintain' }))}
-                                >
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="cut" id="cut" />
-                                        <Label htmlFor="cut">Cut (Lose Weight)</Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="maintain" id="maintain" />
-                                        <Label htmlFor="maintain">Maintain Weight</Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="bulk" id="bulk" />
-                                        <Label htmlFor="bulk">Bulk (Gain Weight)</Label>
-                                    </div>
-                                </RadioGroup>
-                            </div>
+                        <div className="flex justify-between">
+                            <span className="text-sm font-medium">Target Calories:</span>
+                            <span className="text-sm font-bold">{profile.target_calories}</span>
                         </div>
-                    )}
-
-                    {step === 3 && (
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-semibold">Your Caloric Plan</h3>
-
-                            <div className="space-y-3 p-4 bg-muted rounded-lg">
-                                <div className="flex justify-between">
-                                    <span>Maintenance Calories:</span>
-                                    <span className="font-semibold">{profile.maintenance_calories} kcal</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Target Calories:</span>
-                                    <span className="font-semibold text-primary">{profile.target_calories} kcal</span>
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                    {profile.goal === 'bulk' && 'Surplus of 500 calories for weight gain'}
-                                    {profile.goal === 'cut' && 'Deficit of 500 calories for weight loss'}
-                                    {profile.goal === 'maintain' && 'Maintenance calories to maintain current weight'}
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    </div>
 
                     <div className="flex justify-between">
-                        {step > 1 && (
-                            <Button variant="outline" onClick={() => setStep(step - 1)} disabled={loading}>
-                                Back
-                            </Button>
-                        )}
-                        {step < 3 ? (
-                            <Button
-                                onClick={handleNext}
-                                disabled={!isStepValid() || loading}
-                                className="ml-auto"
-                            >
-                                Next
-                            </Button>
-                        ) : (
-                            <Button onClick={handleComplete} className="ml-auto" disabled={loading}>
-                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Complete Setup
-                            </Button>
-                        )}
+                        <Button variant="outline" onClick={() => navigate('/tracker')}>
+                            <ArrowLeft className="h-4 w-4 mr-2" />
+                            Back to Dashboard
+                        </Button>
+                        <Button onClick={handleSave} disabled={loading}>
+                            {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                            <Save className="h-4 w-4 mr-2" />
+                            Save Changes
+                        </Button>
                     </div>
-                </CardContent>
-            </Card>
-        </div>
+                    <Button variant="destructive" onClick={handleSignOut} className="w-full mt-4">
+                        <LogOut className="h-4 w-4 mr-2" />
+                        Sign Out
+                    </Button>
+                </CardContent >
+            </Card >
+        </div >
     );
 };
 
-export default Onboarding;
+export default Settings;

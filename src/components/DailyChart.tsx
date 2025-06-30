@@ -94,7 +94,7 @@ const DailyChart: React.FC<DailyChartProps> = ({ target, current, protein, carbs
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-background border rounded-lg p-3 shadow-lg">
+        <div className="bg-card border rounded-lg p-3 shadow-lg">
           <p className="font-medium">{payload[0].payload.name}</p>
           <p className="text-primary">
             {`${payload[0].value.toFixed(0)} calories`}
@@ -150,11 +150,23 @@ const DailyChart: React.FC<DailyChartProps> = ({ target, current, protein, carbs
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
               <YAxis />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltip />} cursor={false} />
               <Bar
                 dataKey="calories"
                 fill={isOverTarget ? '#ef4444' : '#22c55e'}
                 radius={[4, 4, 0, 0]}
+                onMouseEnter={(data, index) => {
+                  const bar = document.querySelector(`[role="img"] g:nth-child(${index + 2}) rect`);
+                  if (bar) {
+                    bar.setAttribute('fill', isOverTarget ? '#dc2626' : '#16a34a');
+                  }
+                }}
+                onMouseLeave={(data, index) => {
+                  const bar = document.querySelector(`[role="img"] g:nth-child(${index + 2}) rect`);
+                  if (bar) {
+                    bar.setAttribute('fill', isOverTarget ? '#ef4444' : '#22c55e');
+                  }
+                }}
               />
             </BarChart>
           </ResponsiveContainer>
