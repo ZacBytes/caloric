@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Brain, Menu, X, User, LogOut } from 'lucide-react';
@@ -40,17 +39,17 @@ const Header = () => {
             <Brain className="h-8 w-8 text-primary" />
             <span className="text-xl font-bold">CaloricAI</span>
           </div>
-          
+
           <nav className="hidden md:flex items-center space-x-8">
-            <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</a>
-            <a href="#testimonials" className="text-muted-foreground hover:text-foreground transition-colors">Reviews</a>
-            <a href="#pricing" className="text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
+            <a href="/#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</a>
+            <a href="/#testimonials" className="text-muted-foreground hover:text-foreground transition-colors">Reviews</a>
+            <a href="/#pricing" className="text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
           </nav>
-          
+
           <div className="hidden md:flex items-center space-x-4">
             {user ? (
               <div className="flex items-center space-x-4">
-                <Button 
+                <Button
                   variant="ghost"
                   onClick={() => navigate('/tracker')}
                   className="flex items-center space-x-2"
@@ -58,7 +57,7 @@ const Header = () => {
                   <User className="h-4 w-4" />
                   <span>Dashboard</span>
                 </Button>
-                <Button 
+                <Button
                   variant="outline"
                   onClick={handleSignOut}
                   className="flex items-center space-x-2"
@@ -74,7 +73,7 @@ const Header = () => {
               </>
             )}
           </div>
-          
+
           <div className="md:hidden">
             <Button
               variant="ghost"
@@ -85,24 +84,24 @@ const Header = () => {
             </Button>
           </div>
         </div>
-        
+
         {isMenuOpen && (
           <div className="md:hidden py-4 border-t">
             <nav className="flex flex-col space-y-4">
-              <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</a>
-              <a href="#testimonials" className="text-muted-foreground hover:text-foreground transition-colors">Reviews</a>
-              <a href="#pricing" className="text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
+              <a href="/#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</a>
+              <a href="/#testimonials" className="text-muted-foreground hover:text-foreground transition-colors">Reviews</a>
+              <a href="/#pricing" className="text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
               {user ? (
                 <>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     className="justify-start"
                     onClick={() => navigate('/tracker')}
                   >
                     Dashboard
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="justify-start"
                     onClick={handleSignOut}
                   >

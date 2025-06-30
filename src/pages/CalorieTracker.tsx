@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, Plus, Settings } from 'lucide-react';
+import { CalendarDays, Plus, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -44,6 +44,30 @@ const CalorieTracker = () => {
   const [showCustomFood, setShowCustomFood] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+
+  const loadEntriesForDate = async (date: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data: entriesData, error: entriesError } = await supabase
+        .from('food_entries')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .gte('logged_at', `${date}T00:00:00`)
+        .lt('logged_at', `${date}T23:59:59`)
+        .order('logged_at', { ascending: false });
+
+      if (entriesError) {
+        console.error('Entries error:', entriesError);
+      } else {
+        setTodaysEntries(entriesData || []);
+      }
+    } catch (error) {
+      console.error('Error loading entries:', error);
+    }
+  };
 
   useEffect(() => {
     const initializeData = async () => {
@@ -81,21 +105,8 @@ const CalorieTracker = () => {
 
         setProfile(typedProfile);
 
-        // Load today's food entries
-        const today = new Date().toISOString().split('T')[0];
-        const { data: entriesData, error: entriesError } = await supabase
-          .from('food_entries')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .gte('logged_at', `${today}T00:00:00`)
-          .lt('logged_at', `${today}T23:59:59`)
-          .order('logged_at', { ascending: false });
-
-        if (entriesError) {
-          console.error('Entries error:', entriesError);
-        } else {
-          setTodaysEntries(entriesData || []);
-        }
+        // Load entries for selected date
+        await loadEntriesForDate(selectedDate);
 
       } catch (error) {
         console.error('Error loading data:', error);
@@ -110,12 +121,55 @@ const CalorieTracker = () => {
     };
 
     initializeData();
-  }, [navigate]);
+  }, [navigate, selectedDate]);
+
+  const handleDateChange = (newDate: string) => {
+    setSelectedDate(newDate);
+  };
+
+  const goToPreviousDay = () => {
+    const prevDate = new Date(selectedDate);
+    prevDate.setDate(prevDate.getDate() - 1);
+    setSelectedDate(prevDate.toISOString().split('T')[0]);
+  };
+
+  const goToNextDay = () => {
+    const nextDate = new Date(selectedDate);
+    nextDate.setDate(nextDate.getDate() + 1);
+    setSelectedDate(nextDate.toISOString().split('T')[0]);
+  };
+
+  const goToToday = () => {
+    setSelectedDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const formatDisplayDate = (date: string) => {
+    const dateObj = new Date(date);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date === today.toISOString().split('T')[0]) {
+      return 'Today';
+    } else if (date === yesterday.toISOString().split('T')[0]) {
+      return 'Yesterday';
+    } else {
+      return dateObj.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+  };
 
   const addFoodEntry = async (food: Omit<FoodEntry, 'id' | 'logged_at'> & { meal_type?: string }, mealType?: string) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
+
+      // Create the logged_at timestamp using the selected date
+      const loggedAt = new Date(selectedDate + 'T' + new Date().toTimeString().split(' ')[0]);
 
       const { data, error } = await supabase
         .from('food_entries')
@@ -128,6 +182,7 @@ const CalorieTracker = () => {
           fat: food.fat,
           serving_size: food.serving_size,
           meal_type: food.meal_type || mealType || selectedMealType,
+          logged_at: loggedAt.toISOString(),
         })
         .select()
         .single();
@@ -230,18 +285,49 @@ const CalorieTracker = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">CaloricAI Dashboard</h1>
-            <p className="text-muted-foreground flex items-center gap-2">
-              <CalendarDays className="h-4 w-4" />
-              {new Date().toLocaleDateString()}
-            </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate('/onboarding')}>
+            <Button variant="outline" onClick={() => navigate('/settings')}>
               <Settings className="h-4 w-4 mr-2" />
               Settings
             </Button>
           </div>
         </div>
+
+        {/* Date Selector */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <Button variant="outline" size="sm" onClick={goToPreviousDay}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => handleDateChange(e.target.value)}
+                    className="w-auto"
+                  />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium">{formatDisplayDate(selectedDate)}</p>
+                </div>
+                {selectedDate !== new Date().toISOString().split('T')[0] && (
+                  <Button variant="outline" size="sm" onClick={goToToday}>
+                    Today
+                  </Button>
+                )}
+              </div>
+
+              <Button variant="outline" size="sm" onClick={goToNextDay}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Daily Summary */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

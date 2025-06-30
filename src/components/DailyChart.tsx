@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadialBarChart, RadialBar } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Progress } from '@/components/ui/progress';
 
 interface DailyChartProps {
@@ -9,6 +9,48 @@ interface DailyChartProps {
   carbs: number;
   fat: number;
 }
+
+const CircularProgress: React.FC<{ value: number; isOverTarget: boolean }> = ({ value, isOverTarget }) => {
+  const radius = 100;
+  const strokeWidth = 15;
+  const normalizedRadius = radius - strokeWidth * 2;
+  const circumference = normalizedRadius * 2 * Math.PI;
+  const strokeDasharray = `${circumference} ${circumference}`;
+  const strokeDashoffset = circumference - (value / 100) * circumference;
+
+  return (
+    <div className="relative inline-flex items-center justify-center">
+      <svg
+        height={radius * 2}
+        width={radius * 2}
+        className="transform -rotate-90"
+      >
+        {/* Background circle */}
+        <circle
+          stroke="#e5e7eb"
+          fill="transparent"
+          strokeWidth={strokeWidth}
+          r={normalizedRadius}
+          cx={radius}
+          cy={radius}
+        />
+        {/* Progress circle */}
+        <circle
+          stroke={isOverTarget ? '#ef4444' : '#22c55e'}
+          fill="transparent"
+          strokeWidth={strokeWidth}
+          strokeDasharray={strokeDasharray}
+          style={{ strokeDashoffset }}
+          strokeLinecap="round"
+          r={normalizedRadius}
+          cx={radius}
+          cy={radius}
+          className="transition-all duration-300 ease-in-out"
+        />
+      </svg>
+    </div>
+  );
+};
 
 const DailyChart: React.FC<DailyChartProps> = ({ target, current, protein, carbs, fat }) => {
   const calorieProgress = Math.min((current / target) * 100, 100);
@@ -49,14 +91,6 @@ const DailyChart: React.FC<DailyChartProps> = ({ target, current, protein, carbs
     },
   ];
 
-  const radialData = [
-    {
-      name: 'Calories',
-      value: calorieProgress,
-      fill: isOverTarget ? '#ef4444' : '#22c55e',
-    },
-  ];
-
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -89,19 +123,11 @@ const DailyChart: React.FC<DailyChartProps> = ({ target, current, protein, carbs
     <div className="space-y-8">
       {/* Calorie Progress Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Radial Progress */}
+        {/* Circular Progress */}
         <div className="flex flex-col items-center space-y-4">
           <h4 className="text-lg font-semibold">Daily Calorie Goal</h4>
           <div className="relative">
-            <ResponsiveContainer width={200} height={200}>
-              <RadialBarChart cx="50%" cy="50%" innerRadius="60%" outerRadius="90%" data={radialData}>
-                <RadialBar
-                  dataKey="value"
-                  cornerRadius={10}
-                  fill={isOverTarget ? '#ef4444' : '#22c55e'}
-                />
-              </RadialBarChart>
-            </ResponsiveContainer>
+            <CircularProgress value={calorieProgress} isOverTarget={isOverTarget} />
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-2xl font-bold">{Math.round(calorieProgress)}%</span>
               <span className="text-sm text-muted-foreground">
