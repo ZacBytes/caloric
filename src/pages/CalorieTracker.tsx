@@ -750,8 +750,8 @@ ${Object.entries(mealPatterns).length > 0 ?
 
       {showChatbot && (
         <div className={`fixed bg-background border rounded-lg shadow-xl flex flex-col ${isChatMaximized
-            ? 'inset-4 z-50'
-            : 'bottom-6 right-6 w-80 h-96'
+          ? 'inset-4 z-50'
+          : 'bottom-6 right-6 w-80 h-96'
           }`}>
           <div className="flex items-center justify-between p-4 border-b">
             <h3 className="font-semibold">AI Nutrition Assistant</h3>
