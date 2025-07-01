@@ -65,7 +65,7 @@ const Onboarding = () => {
     };
 
     const maintenanceCalories = Math.round(bmr * activityMultipliers[profile.activity_level]);
-    
+
     let targetCalories = maintenanceCalories;
     if (profile.goal === 'bulk') {
       targetCalories = maintenanceCalories + 500;
@@ -91,7 +91,7 @@ const Onboarding = () => {
 
   const handleComplete = async () => {
     setLoading(true);
-    
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -158,7 +158,7 @@ const Onboarding = () => {
           {step === 1 && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Basic Information</h3>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="weight">Weight (kg)</Label>
                 <Input
@@ -214,7 +214,7 @@ const Onboarding = () => {
           {step === 2 && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Activity & Goals</h3>
-              
+
               <div className="space-y-2">
                 <Label>Activity Level</Label>
                 <RadioGroup
@@ -270,7 +270,7 @@ const Onboarding = () => {
           {step === 3 && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Your Caloric Plan</h3>
-              
+
               <div className="space-y-3 p-4 bg-muted rounded-lg">
                 <div className="flex justify-between">
                   <span>Maintenance Calories:</span>
@@ -296,8 +296,8 @@ const Onboarding = () => {
               </Button>
             )}
             {step < 3 ? (
-              <Button 
-                onClick={handleNext} 
+              <Button
+                onClick={handleNext}
                 disabled={!isStepValid() || loading}
                 className="ml-auto"
               >
